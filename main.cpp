@@ -13,10 +13,11 @@ struct State
 	int n;
 };
 
-void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<State>& tmp, u8 s2)
+void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<State>& next, int size, u8 s2)
 {
-	for (State state : tmp)
+	for(int i=0;i<size;i++)
 	{
+		State state = next[i];
 		state.s2 = s2;
 		if (na0 <= 1)
 		{
@@ -82,10 +83,13 @@ int main()
 
 	int bit;
 	State current;
+	std::vector<State> next(3);
+	int size;
 	while (!s.empty())
 	{
 		current = s.top();
 		s.pop();
+		size = 0;
 
 		if (current.ib>current.ie && current.jb>current.je)
 		{
@@ -94,32 +98,33 @@ int main()
 			continue;
 		}
 
-		std::vector<State> tmp;
 		switch (current.s1)
 		{
 		case 0:
 		{
 			if ((b[0] >> current.n) & 1)
 			{
-				tmp.push_back({ {current.a[0] | (1 << current.ib), current.a[1] | (1 << current.jb)},
+				next[0] = { {current.a[0] | (1 << current.ib), current.a[1] | (1 << current.jb)},
 				current.ib + 1, current.ie, current.jb + 1, current.je,
 				2, current.s2,
-				current.n + 1 });
+				current.n + 1 };
+				size = 1;
 			}
 			else
 			{
-				tmp.push_back({ {current.a[0] | (1 << current.ib), current.a[1] },
+				next[0] = { {current.a[0] | (1 << current.ib), current.a[1] },
 				current.ib + 1, current.ie, current.jb + 1, current.je,
 				1, current.s2,
-				current.n + 1});
-				tmp.push_back({ {current.a[0], current.a[1] | (1 << current.jb)},
+				current.n + 1 };
+				next[1] = { {current.a[0], current.a[1] | (1 << current.jb)},
 				current.ib + 1, current.ie, current.jb + 1, current.je,
 				1, current.s2,
-				current.n + 1});
-				tmp.push_back({ {current.a[0], current.a[1]},
+				current.n + 1 };
+				next[2] = { {current.a[0], current.a[1]},
 				current.ib + 1, current.ie, current.jb + 1, current.je,
 				3, current.s2,
-				current.n + 1 });
+				current.n + 1 };
+				size = 3;
 			}
 			break;
 		}
@@ -128,19 +133,20 @@ int main()
 			if ((b[0] >> current.n) & 1)
 			{
 				bit = (current.a[0] >> (current.ib - 1)) & 1;
-				tmp.push_back({ {current.a[0] | ((bit ^ 1) << current.ib), current.a[1] | (bit << current.jb)},
+				next[0] = { {current.a[0] | ((bit ^ 1) << current.ib), current.a[1] | (bit << current.jb)},
 				current.ib + (bit ^ 1), current.ie, current.jb + bit, current.je,
 				2, current.s2,
-				current.n + 1 });
+				current.n + 1 };
 			}
 			else
 			{
 				bit = (current.a[0] >> (current.ib - 1)) & 1;
-				tmp.push_back({ {current.a[0], current.a[1]},
+				next[0] = { {current.a[0], current.a[1]},
 				current.ib + (bit ^ 1), current.ie, current.jb + bit, current.je,
 				1, current.s2,
-				current.n + 1 });
+				current.n + 1 };
 			}
+			size = 1;
 			break;
 		}
 		case 2:
@@ -152,24 +158,26 @@ int main()
 			}
 
 			bit = ((b[0] >> current.n) & 1) ^ res;
-			tmp.push_back({ {current.a[0] | (1 << current.ib), current.a[1] | ((bit ^ 1) << current.jb)},
+			next[0] = { {current.a[0] | (1 << current.ib), current.a[1] | ((bit ^ 1) << current.jb)},
 			current.ib + 1, current.ie, current.jb + 1, current.je,
 			2, current.s2,
-			current.n + 1 });
-			tmp.push_back({ {current.a[0], current.a[1] | (bit << current.jb)},
+			current.n + 1 };
+			next[1] = { {current.a[0], current.a[1] | (bit << current.jb)},
 			current.ib + 1, current.ie, current.jb + 1, current.je,
 			2, current.s2,
-			current.n + 1 });
+			current.n + 1 };
+			size = 2;
 			break;
 		}
 		case 3:
 		{
 			if (((b[0] >> current.n ) & 1) == 0)
 			{
-				tmp.push_back({ {current.a[0], current.a[1]},
+				next[0] = { {current.a[0], current.a[1]},
 				current.ib, current.ie, current.jb, current.je,
 				0, current.s2,
-				current.n + 1});
+				current.n + 1};
+				size = 1;
 			}
 			break;
 		}
@@ -177,8 +185,8 @@ int main()
 
 		if (current.n == 0)
 		{
-			for (State& st : tmp)
-				s.push(st);
+			for (int i=0;i<size;i++)
+				s.push(next[i]);
 			continue;
 		}
 
@@ -188,13 +196,13 @@ int main()
 		{
 			if ((b[1] >> (31 - current.n)) & 1)
 			{
-				checkAndAdd(1, 1, s, tmp, 2);
+				checkAndAdd(1, 1, s, next, size, 2);
 			}
 			else
 			{
-				checkAndAdd(0, 1, s, tmp, 1);
-				checkAndAdd(1, 0, s, tmp, 1);
-				checkAndAdd(0, 0, s, tmp, 3);
+				checkAndAdd(0, 1, s, next, size, 1);
+				checkAndAdd(1, 0, s, next, size, 1);
+				checkAndAdd(0, 0, s, next, size, 3);
 			}
 			break;
 		}
@@ -203,12 +211,12 @@ int main()
 			if ((b[1] >> (31 - current.n)) & 1)
 			{
 				bit = (current.a[0] >> (31 - current.ie + 1)) & 1;
-				checkAndAdd(1+bit, 1+(bit^1), s, tmp, 2);
+				checkAndAdd(1+bit, 1+(bit^1), s, next, size, 2);
 			}
 			else
 			{
 				bit = (current.a[0] >> (31 - current.ie + 1)) & 1;
-				checkAndAdd(bit<<1, (bit^1)<<1, s, tmp, 1);
+				checkAndAdd(bit<<1, (bit^1)<<1, s, next, size, 1);
 			}
 			break;
 		}
@@ -221,15 +229,15 @@ int main()
 			}
 
 			bit = ((b[1] >> (31 - current.n)) & 1) ^ res;
-			checkAndAdd(bit^1, 1, s, tmp, 2);
-			checkAndAdd(bit, 0, s, tmp, 2);
+			checkAndAdd(bit^1, 1, s, next, size, 2);
+			checkAndAdd(bit, 0, s, next, size, 2);
 			break;
 		}
 		case 3:
 		{
 			if (((b[1] >> (31 - current.n )) & 1) == 0)
 			{
-				checkAndAdd(2, 2, s, tmp, 0);
+				checkAndAdd(2, 2, s, next, size, 0);
 			}
 			break;
 		}
