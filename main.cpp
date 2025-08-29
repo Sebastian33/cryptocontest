@@ -2,17 +2,22 @@
 #include <stack>
 #include <vector>
 
+using u8 = unsigned char;
+
 struct State
 {
 	unsigned a[2];
 	int ib, ie, jb, je;
+	u8 s1 : 2;
+	u8 s2 : 2;
 	int n;
 };
 
-void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<State>& tmp)
+void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<State>& tmp, u8 s2)
 {
 	for (State state : tmp)
 	{
+		state.s2 = s2;
 		if (na0 <= 1)
 		{
 			if (state.ie < state.ib && ((state.a[0] >> state.ie) & 1) != na0)
@@ -70,148 +75,166 @@ void binOut(unsigned* a)
 int main()
 {
 	std::stack<State> s;
-	s.push({ {0, 0}, 0,31,0,31, 0});
+	s.push({ {0, 0}, 0, 31, 0, 31, 0, 0, 0});
 	unsigned b[2] = { 0x46508fb7, 0x6677e201 };
 	/*b0c152f9 ebf2831f
 	ebf2831f b0c152f9*/
 
-
-	unsigned bi;
-	unsigned a0, a1;
-	int res;
+	int bit;
 	State current;
 	while (!s.empty())
 	{
 		current = s.top();
-		s.pop();					
+		s.pop();
 
-		if (current.ib > current.ie && current.jb > current.je)
-		//if(current.n>=31)
+		if (current.ib>current.ie && current.jb>current.je)
 		{
-			if(check(current, b))
+			if (check(current, b))
 				std::cout << std::hex << current.a[0] << ' ' << current.a[1] << std::endl;
 			continue;
 		}
 
 		std::vector<State> tmp;
-		res = 0;
-		bi = (b[0] >> current.n) & 1;
-		for (int i = 0; i <= current.n; i++)
+		switch (current.s1)
 		{
-			res ^= (current.a[0] >> i) & (current.a[1] >> (current.n - i)) & 1;
-		}
-
-		bi ^= res;
-		if (current.ib+current.jb == current.n)
+		case 0:
 		{
-			if (bi)
+			if ((b[0] >> current.n) & 1)
 			{
-				tmp.push_back({ {current.a[0] | (1U << current.ib), current.a[1] | (1U << current.jb)},
-					current.ib + 1, current.ie, current.jb + 1, current.je,
-					current.n + 1 });
+				tmp.push_back({ {current.a[0] | (1 << current.ib), current.a[1] | (1 << current.jb)},
+				current.ib + 1, current.ie, current.jb + 1, current.je,
+				2, current.s2,
+				current.n + 1 });
 			}
 			else
+			{
+				tmp.push_back({ {current.a[0] | (1 << current.ib), current.a[1] },
+				current.ib + 1, current.ie, current.jb + 1, current.je,
+				1, current.s2,
+				current.n + 1});
+				tmp.push_back({ {current.a[0], current.a[1] | (1 << current.jb)},
+				current.ib + 1, current.ie, current.jb + 1, current.je,
+				1, current.s2,
+				current.n + 1});
+				tmp.push_back({ {current.a[0], current.a[1]},
+				current.ib + 1, current.ie, current.jb + 1, current.je,
+				3, current.s2,
+				current.n + 1 });
+			}
+			break;
+		}
+		case 1:
+		{
+			if ((b[0] >> current.n) & 1)
+			{
+				bit = (current.a[0] >> (current.ib - 1)) & 1;
+				tmp.push_back({ {current.a[0] | ((bit ^ 1) << current.ib), current.a[1] | (bit << current.jb)},
+				current.ib + (bit ^ 1), current.ie, current.jb + bit, current.je,
+				2, current.s2,
+				current.n + 1 });
+			}
+			else
+			{
+				bit = (current.a[0] >> (current.ib - 1)) & 1;
+				tmp.push_back({ {current.a[0], current.a[1]},
+				current.ib + (bit ^ 1), current.ie, current.jb + bit, current.je,
+				1, current.s2,
+				current.n + 1 });
+			}
+			break;
+		}
+		case 2:
+		{
+			int res = 0;
+			for (int i = 0; i <= current.n; i++)
+			{
+				res ^= (current.a[0] >> i) & (current.a[1] >> (current.n - i)) & 1;
+			}
+
+			bit = ((b[0] >> current.n) & 1) ^ res;
+			tmp.push_back({ {current.a[0] | (1 << current.ib), current.a[1] | ((bit ^ 1) << current.jb)},
+			current.ib + 1, current.ie, current.jb + 1, current.je,
+			2, current.s2,
+			current.n + 1 });
+			tmp.push_back({ {current.a[0], current.a[1] | (bit << current.jb)},
+			current.ib + 1, current.ie, current.jb + 1, current.je,
+			2, current.s2,
+			current.n + 1 });
+			break;
+		}
+		case 3:
+		{
+			if (((b[0] >> current.n ) & 1) == 0)
 			{
 				tmp.push_back({ {current.a[0], current.a[1]},
-					current.ib + 1, current.ie, current.jb+1, current.je,
-					current.n + 1 });
-				tmp.push_back({ {current.a[0] | (1U << current.ib), current.a[1] },
-					current.ib + 1, current.ie, current.jb+1, current.je,
-					current.n + 1 });
-				tmp.push_back({ {current.a[0], current.a[1] | (1U << current.jb)},
-					current.ib + 1, current.ie, current.jb+1, current.je,
-					current.n + 1 });
+				current.ib, current.ie, current.jb, current.je,
+				0, current.s2,
+				current.n + 1});
 			}
+			break;
 		}
-		else if ((current.a[1] >> (current.n - current.ib)) & (current.a[0] >> (current.n - current.jb)) & 1)
-		{
-			if (bi)
-			{
-				tmp.push_back({ {current.a[0] | (1U << current.ib), current.a[1] },
-					current.ib + 1, current.ie, current.jb + 1, current.je,
-					current.n + 1 });
-				tmp.push_back({ {current.a[0], current.a[1] | (1U << current.jb)},
-					current.ib + 1, current.ie, current.jb + 1, current.je,
-					current.n + 1 });
-			}
-			else
-			{
-				tmp.push_back({ {current.a[0], current.a[1] },
-					current.ib + 1, current.ie, current.jb + 1, current.je,
-					current.n + 1 });
-				tmp.push_back({ {current.a[0] | (1U << current.ib), current.a[1] | (1U << current.jb)},
-					current.ib + 1, current.ie, current.jb + 1, current.je,
-					current.n + 1 });
-			}
 		}
-		else if ((current.a[0] >> (current.n - current.jb)) & 1)
-		{
-			tmp.push_back({ {current.a[0], current.a[1] | (bi << current.jb)},
-					current.ib, current.ie, current.jb + 1, current.je,
-					current.n + 1 });
-		}
-		else if ((current.a[1] >> (current.n - current.ib)) & 1)
-		{
-			tmp.push_back({ {current.a[0] | (bi << current.ib), current.a[1] },
-					current.ib + 1, current.ie, current.jb, current.je,
-					current.n + 1 });
-		}
-		else if (bi == 0)
-			tmp.push_back({ {current.a[0], current.a[1] },
-					current.ib, current.ie, current.jb, current.je,
-					current.n + 1 });
 
-		if (tmp.empty())
+		if (current.n == 0)
+		{
+			for (State& st : tmp)
+				s.push(st);
 			continue;
-
-		res = 0;
-		bi = (b[1] >> (31 - current.n)) & 1;
-		for (int i = 32 - current.n; i < 32; i++)
-		{
-			res ^= (current.a[0] >> i) & (current.a[1] >> (63 - current.n - i)) & 1;
 		}
 
-		bi ^= res;
-		if (current.ie + current.je == 63-current.n)
+		switch (current.s2)
 		{
-			if (bi)
+		case 0:
+		{
+			if ((b[1] >> (31 - current.n)) & 1)
 			{
-				checkAndAdd(1, 1, s, tmp);
+				checkAndAdd(1, 1, s, tmp, 2);
 			}
 			else
 			{
-				checkAndAdd(0, 0, s, tmp);
-				checkAndAdd(1, 0, s, tmp);
-				checkAndAdd(0, 1, s, tmp);
+				checkAndAdd(0, 1, s, tmp, 1);
+				checkAndAdd(1, 0, s, tmp, 1);
+				checkAndAdd(0, 0, s, tmp, 3);
 			}
+			break;
 		}
-		else if ((current.a[1] >> (63 - current.n - current.ie)) & (current.a[0] >> (63 - current.n - current.je)) & 1)
+		case 1:
 		{
-			if (bi)
+			if ((b[1] >> (31 - current.n)) & 1)
 			{
-				checkAndAdd(1, 0, s, tmp);
-				checkAndAdd(0, 1, s, tmp);
+				bit = (current.a[0] >> (31 - current.ie + 1)) & 1;
+				checkAndAdd(1+bit, 1+(bit^1), s, tmp, 2);
 			}
 			else
 			{
-				checkAndAdd(0, 0, s, tmp);
-				checkAndAdd(1, 1, s, tmp);
+				bit = (current.a[0] >> (31 - current.ie + 1)) & 1;
+				checkAndAdd(bit<<1, (bit^1)<<1, s, tmp, 1);
 			}
+			break;
 		}
-		else if ((current.a[0] >> (63 - current.n - current.je)) & 1)
+		case 2:
 		{
-			checkAndAdd(2, bi, s, tmp);
+			int res = 0;
+			for (int i = 32 - current.n; i < 32; i++)
+			{
+				res ^= (current.a[0] >> i) & (current.a[1] >> (63 - current.n - i)) & 1;
+			}
+
+			bit = ((b[1] >> (31 - current.n)) & 1) ^ res;
+			checkAndAdd(bit^1, 1, s, tmp, 2);
+			checkAndAdd(bit, 0, s, tmp, 2);
+			break;
 		}
-		else if ((current.a[1] >> (63 - current.n - current.ie)) & 1)
+		case 3:
 		{
-			checkAndAdd(bi, 2, s, tmp);
+			if (((b[1] >> (31 - current.n )) & 1) == 0)
+			{
+				checkAndAdd(2, 2, s, tmp, 0);
+			}
+			break;
 		}
-		else if (bi == 0)
-		{
-			for (State& state : tmp)
-				s.push(state);
 		}
+
 	}
-
 	std::cout << "done" << std::endl;
 }
