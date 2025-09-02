@@ -11,13 +11,32 @@ struct State
 	u8 s1 : 2;
 	u8 s2 : 2;
 	int n;
+
 };
+
+unsigned inv(unsigned a)
+{
+	unsigned b(0);
+	for (int i = 0; i < 16; i++)
+		b |= (((a >> i) & 1) << (31 - i)) | (((a >> (31 - i)) & 1) << i);
+	return b;
+}
+
+int ones(unsigned a)
+{
+	a = ((a & 0xaaaaaaaa) >> 1) + (a & 0x55555555);
+	a = ((a & 0xcccccccc) >> 2) + (a & 0x33333333);
+	a = ((a & 0xf0f0f0f0) >> 4) + (a & 0x0f0f0f0f);
+	a = ((a & 0xff00ff00) >> 8) + (a & 0x00ff00ff);
+	a = ((a & 0xffff0000) >> 16) + (a & 0x0000ffff);
+	return a;
+}
 
 void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<State>& next, int size, u8 s2)
 {
 	for(int i=0;i<size;i++)
 	{
-		State state = next[i];
+		State state(next[i]);
 		state.s2 = s2;
 		if (na0 <= 1)
 		{
@@ -28,10 +47,10 @@ void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<S
 		}
 		if (na1 <= 1)
 		{
-			if (state.je < state.jb && ((state.a[1] >> state.je) & 1) != na1)
+			if (state.je > state.jb && ((state.a[1] >> state.je) & 1) != na1)
 				continue;
 			state.a[1] |= na1 << state.je;
-			state.je--;
+			state.je++;
 		}
 		s.push(state);
 	}
@@ -39,25 +58,14 @@ void checkAndAdd(unsigned na0, unsigned na1, std::stack<State>& s, std::vector<S
 
 bool check(const State& s, unsigned* b)
 {
-	int res;
 	for (int n = s.n; n < 32; n++)
 	{
-		res = 0;
-		for (int i = 0; i <= n; i++)
-		{
-			res ^= (s.a[0] >> i) & (s.a[1] >> (n - i)) & 1;
-		}
-		if (res != ((b[0] >> n) & 1))
+		if ((ones(s.a[0] & (s.a[1] >> (31 - n))) & 1) != ((b[0] >> n) & 1))
 			return false;
 	}
 	for (int n = 32; n <= 63 - s.n; n++)
 	{
-		res = 0;
-		for (int i = n - 31; i < 32; i++)
-		{
-			res ^= (s.a[0] >> i) & (s.a[1] >> (n - i)) & 1;
-		}
-		if (res != ((b[1] >> (n - 32)) & 1))
+		if ((ones((s.a[0] >> (n - 31)) & s.a[1]) & 1) != ((b[1] >> (n - 32)) & 1))
 			return false;
 	}
 	return true;
@@ -76,7 +84,7 @@ void binOut(unsigned* a)
 int main()
 {
 	std::stack<State> s;
-	s.push({ {0, 0}, 0, 31, 0, 31, 0, 0, 0});
+	s.push({ {0, 0}, 0, 31, 31, 0, 0, 0, 0});
 	unsigned b[2] = { 0x46508fb7, 0x6677e201 };
 	/*b0c152f9 ebf2831f
 	ebf2831f b0c152f9*/
@@ -91,10 +99,10 @@ int main()
 		s.pop();
 		size = 0;
 
-		if (current.ib>current.ie && current.jb>current.je)
+		if (current.ib>current.ie && current.je>current.jb)
 		{
 			if (check(current, b))
-				std::cout << std::hex << current.a[0] << ' ' << current.a[1] << std::endl;
+				std::cout << std::hex << current.a[0] << ' ' << inv(current.a[1]) << std::endl;
 			continue;
 		}
 
@@ -105,7 +113,7 @@ int main()
 			if ((b[0] >> current.n) & 1)
 			{
 				next[0] = { {current.a[0] | (1 << current.ib), current.a[1] | (1 << current.jb)},
-				current.ib + 1, current.ie, current.jb + 1, current.je,
+				current.ib + 1, current.ie, current.jb - 1, current.je,
 				2, current.s2,
 				current.n + 1 };
 				size = 1;
@@ -113,15 +121,15 @@ int main()
 			else
 			{
 				next[0] = { {current.a[0] | (1 << current.ib), current.a[1] },
-				current.ib + 1, current.ie, current.jb + 1, current.je,
+				current.ib + 1, current.ie, current.jb - 1, current.je,
 				1, current.s2,
 				current.n + 1 };
 				next[1] = { {current.a[0], current.a[1] | (1 << current.jb)},
-				current.ib + 1, current.ie, current.jb + 1, current.je,
+				current.ib + 1, current.ie, current.jb - 1, current.je,
 				1, current.s2,
 				current.n + 1 };
 				next[2] = { {current.a[0], current.a[1]},
-				current.ib + 1, current.ie, current.jb + 1, current.je,
+				current.ib + 1, current.ie, current.jb - 1, current.je,
 				3, current.s2,
 				current.n + 1 };
 				size = 3;
@@ -134,7 +142,7 @@ int main()
 			{
 				bit = (current.a[0] >> (current.ib - 1)) & 1;
 				next[0] = { {current.a[0] | ((bit ^ 1) << current.ib), current.a[1] | (bit << current.jb)},
-				current.ib + (bit ^ 1), current.ie, current.jb + bit, current.je,
+				current.ib + (bit ^ 1), current.ie, current.jb - bit, current.je,
 				2, current.s2,
 				current.n + 1 };
 			}
@@ -142,7 +150,7 @@ int main()
 			{
 				bit = (current.a[0] >> (current.ib - 1)) & 1;
 				next[0] = { {current.a[0], current.a[1]},
-				current.ib + (bit ^ 1), current.ie, current.jb + bit, current.je,
+				current.ib + (bit ^ 1), current.ie, current.jb - bit, current.je,
 				1, current.s2,
 				current.n + 1 };
 			}
@@ -151,19 +159,15 @@ int main()
 		}
 		case 2:
 		{
-			int res = 0;
-			for (int i = 0; i <= current.n; i++)
-			{
-				res ^= (current.a[0] >> i) & (current.a[1] >> (current.n - i)) & 1;
-			}
+			int res = ones(current.a[0] & (current.a[1] >> (31 - current.n))) & 1;
 
 			bit = ((b[0] >> current.n) & 1) ^ res;
 			next[0] = { {current.a[0] | (1 << current.ib), current.a[1] | ((bit ^ 1) << current.jb)},
-			current.ib + 1, current.ie, current.jb + 1, current.je,
+			current.ib + 1, current.ie, current.jb - 1, current.je,
 			2, current.s2,
 			current.n + 1 };
 			next[1] = { {current.a[0], current.a[1] | (bit << current.jb)},
-			current.ib + 1, current.ie, current.jb + 1, current.je,
+			current.ib + 1, current.ie, current.jb - 1, current.je,
 			2, current.s2,
 			current.n + 1 };
 			size = 2;
@@ -222,11 +226,7 @@ int main()
 		}
 		case 2:
 		{
-			int res = 0;
-			for (int i = 32 - current.n; i < 32; i++)
-			{
-				res ^= (current.a[0] >> i) & (current.a[1] >> (63 - current.n - i)) & 1;
-			}
+			int res = ones((current.a[0] >> (32 - current.n)) & current.a[1]) & 1;
 
 			bit = ((b[1] >> (31 - current.n)) & 1) ^ res;
 			checkAndAdd(bit^1, 1, s, next, size, 2);
